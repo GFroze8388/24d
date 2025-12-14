@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #222;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .canvas-container {
+            position: relative;
+            width: 800px;
+            height: 500px;
+        }
+        canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            border: 2px solid #666;
+        }
+        #imageCanvas {
+            z-index: 1;
+        }
+        .qr{
+            z-index: 2;
+            cursor: move;
+        }
+        #maskCanvas {
+            z-index: 3;
+            cursor: crosshair;
+        }
+        .controls {
+            margin: 15px 0;
+            color: white;
+        }
+        button {
+            margin: 5px;
+            padding: 10px 20px;
+            background: #4a6fa5;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #5a7fb5;
+        }
+        .info {
+            color: #ccc;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="canvas-container">
+        <!-- Нижний слой: изображение -->
+        <canvas id="imageCanvas" width="800" height="500"></canvas>
+        <canvas class="qr" id="qr1" width="106" height="106" style="left: 69px; top: 68px;"></canvas>
+        <canvas class="qr" id="qr2" width="106" height="106" style="left: 629px; top: 68px;"></canvas>
+        <!-- Верхний слой: белая маска -->
+        <canvas id="maskCanvas" width="800" height="500"></canvas>
+    </div>
+
+    <script>
+        // Изображение, которое будет под белым фоном
+        const imageUrl = 'https://i.ibb.co/BHshSqby/24d.png';
+        const qr1Url = 'https://i.ibb.co/RkSSRpB2/photo-2025-12-14-11-41-23.jpg';
+        const qr2Url = 'https://i.ibb.co/RkSSRpB2/photo-2025-12-14-11-41-23.jpg';
+        
+        const imageCanvas = document.getElementById('imageCanvas');
+        const maskCanvas = document.getElementById('maskCanvas');
+        const imageCtx = imageCanvas.getContext('2d');
+        const maskCtx = maskCanvas.getContext('2d');
+        const qr1 = document.getElementById('qr1');
+        const qr2 = document.getElementById('qr2');
+        const qr1Ctx = qr1.getContext('2d');
+        const qr2Ctx = qr2.getContext('2d');
+        
+        let isDrawing = false;
+        let eraserSize = 90;
+        
+        // Переменные для хранения предыдущих координат
+        let lastX = 0;
+        let lastY = 0;
+        
+        // Загружаем и рисуем изображение на нижнем canvas
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = function() {
+            // Рисуем изображение на нижнем canvas
+            imageCtx.drawImage(img, 0, 0, imageCanvas.width, imageCanvas.height);
+        };
+        img.src = imageUrl;
+
+        const img2 = new Image();
+        img2.crossOrigin = 'anonymous';
+        img2.onload = function() {
+            // Рисуем изображение на нижнем canvas
+            qr1Ctx.drawImage(img2, 0, 0, qr1.width, qr1.height);
+        };
+        img2.src = qr1Url;
+
+        const img3 = new Image();
+        img3.crossOrigin = 'anonymous';
+        img3.onload = function() {
+            // Рисуем изображение на нижнем canvas
+            qr2Ctx.drawImage(img3, 0, 0, qr2.width, qr2.height);
+        };
+        img3.src = qr2Url;
+        
+        function initWhiteMask() {
+            // Заполняем белым цветом
+            maskCtx.fillStyle = 'white';
+            maskCtx.fillRect(0, 0, maskCanvas.width, maskCanvas.height);
+        }
+        
+        // Начало стирания
+        maskCanvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            const rect = maskCanvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+            erase(e); // Стираем первую точку
+        });
+        
+        // Процесс стирания
+        maskCanvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing) return;
+            
+            const rect = maskCanvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+            
+            // Рисуем линию между предыдущей и текущей точкой
+            drawLine(lastX, lastY, currentX, currentY);
+            
+            // Обновляем последние координаты
+            lastX = currentX;
+            lastY = currentY;
+        });
+        
+        // Конец стирания
+        maskCanvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+            maskCtx.beginPath();
+        });
+        
+        maskCanvas.addEventListener('mouseout', () => {
+            isDrawing = false;
+        });
+        
+        // Функция для стирания в одной точке
+        function erase(e) {
+            const rect = maskCanvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            maskCtx.globalCompositeOperation = 'destination-out';
+            maskCtx.beginPath();
+            maskCtx.arc(x, y, eraserSize / 2, 0, Math.PI * 2);
+            maskCtx.fill();
+            maskCtx.globalCompositeOperation = 'source-over';
+        }
+        
+        // Функция для рисования линии между двумя точками
+        function drawLine(x1, y1, x2, y2) {
+            const distance = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+            const steps = Math.max(1, Math.floor(distance / 2)); // Шаг в 2 пикселя
+            
+            maskCtx.globalCompositeOperation = 'destination-out';
+            maskCtx.beginPath();
+            
+            if (steps > 1) {
+                // Рисуем промежуточные точки для гладкой линии
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const x = x1 + (x2 - x1) * t;
+                    const y = y1 + (y2 - y1) * t;
+                    
+                    if (i === 0) {
+                        maskCtx.moveTo(x + eraserSize / 2, y);
+                    }
+                    
+                    maskCtx.arc(x, y, eraserSize / 2, 0, Math.PI * 2);
+                }
+            } else {
+                // Если точки близко, просто рисуем круги в обеих точках
+                maskCtx.arc(x1, y1, eraserSize / 2, 0, Math.PI * 2);
+                maskCtx.arc(x2, y2, eraserSize / 2, 0, Math.PI * 2);
+            }
+            
+            maskCtx.fill();
+            maskCtx.globalCompositeOperation = 'source-over';
+        }
+        
+        // События для сенсорных устройств
+        maskCanvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDrawing = true;
+            const touch = e.touches[0];
+            const rect = maskCanvas.getBoundingClientRect();
+            lastX = touch.clientX - rect.left;
+            lastY = touch.clientY - rect.top;
+            eraseTouch(touch);
+        });
+        
+        maskCanvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!isDrawing) return;
+            const touch = e.touches[0];
+            const rect = maskCanvas.getBoundingClientRect();
+            const currentX = touch.clientX - rect.left;
+            const currentY = touch.clientY - rect.top;
+            
+            drawLine(lastX, lastY, currentX, currentY);
+            lastX = currentX;
+            lastY = currentY;
+        });
+        
+        maskCanvas.addEventListener('touchend', () => {
+            isDrawing = false;
+        });
+        
+        function eraseTouch(touch) {
+            const rect = maskCanvas.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const y = touch.clientY - rect.top;
+            
+            maskCtx.globalCompositeOperation = 'destination-out';
+            maskCtx.beginPath();
+            maskCtx.arc(x, y, eraserSize / 2, 0, Math.PI * 2);
+            maskCtx.fill();
+            maskCtx.globalCompositeOperation = 'source-over';
+        }
+        initWhiteMask();
+    </script>
+</body>
+</html>
